@@ -24,7 +24,7 @@ from core import detect                                  # noqa: E402
 from core.config import Config                           # noqa: E402
 from core.downloader import save                         # noqa: E402
 from core.finalize import finalize                       # noqa: E402
-from core.http import load_netscape_cookies, make_session  # noqa: E402
+from core.http import load_netscape_cookies, make_session, proxy_alive  # noqa: E402
 from core.result import Status                           # noqa: E402
 from platforms import douyin, gallerydl_backend, xhs, ytdlp_backend  # noqa: E402
 
@@ -149,6 +149,7 @@ def main() -> int:
     parser.add_argument("--cover", choices=["sidecar", "embed", "both", "none"],
                         help="封面处理方式，覆盖配置")
     parser.add_argument("--dry-run", action="store_true", help="只识别平台，不下载")
+    parser.add_argument("--no-proxy", action="store_true", help="本次忽略代理，直连")
     parser.add_argument("-v", "--verbose", action="store_true", help="输出调试信息")
     args = parser.parse_args()
 
@@ -156,6 +157,12 @@ def main() -> int:
     logger = setup_logger(cfg)
     if args.verbose:
         logger.setLevel(logging.DEBUG)
+
+    if args.no_proxy:
+        cfg.override_proxy("")
+    elif cfg.proxy and not proxy_alive(cfg.proxy):
+        logger.warning("代理 %s 连不上，本次改为直连", cfg.proxy)
+        cfg.override_proxy("")
 
     lock = Path(os.path.expanduser(str(cfg.get("general.lock_file", "~/media-dl.lock"))))
     if not acquire_lock(lock):

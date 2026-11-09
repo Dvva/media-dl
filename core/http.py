@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import socket
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 
@@ -32,6 +34,22 @@ def load_netscape_cookies(path: Path | None) -> dict[str, str]:
         if name:
             jars[name] = value
     return jars
+
+
+def proxy_alive(proxy: str, timeout: float = 0.6) -> bool:
+    """探测本地代理端口是否在监听（flclash 没开时避免全部请求失败）。"""
+    if not proxy:
+        return False
+    parsed = urlparse(proxy if "://" in proxy else "http://" + proxy)
+    host = parsed.hostname
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    if not host or not port:
+        return False
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 
 def make_session(

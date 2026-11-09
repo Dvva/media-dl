@@ -87,6 +87,14 @@ def extract(
     cookie = cfg.cookie_file(platform)
     if cookie:
         cmd += ["--cookies", str(cookie)]
+    if platform == "bilibili":
+        # B站没带 Referer/UA 时容易直接 412
+        cmd += [
+            "--add-header", "Referer:https://www.bilibili.com/",
+            "--user-agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        ]
     if cfg.proxy:
         cmd += ["--proxy", cfg.proxy]
     cmd.append(url)

@@ -49,6 +49,7 @@ class Config:
 
     def __init__(self, data: dict):
         self.data = data
+        self._proxy_override: str | None = None
 
     @classmethod
     def load(cls, extra_path: str | None = None) -> "Config":
@@ -74,6 +75,8 @@ class Config:
 
     @property
     def proxy(self) -> str:
+        if self._proxy_override is not None:
+            return self._proxy_override
         # 配置优先，其次环境变量
         return (
             self.get("general.proxy")
@@ -81,6 +84,10 @@ class Config:
             or os.environ.get("HTTPS_PROXY")
             or ""
         )
+
+    def override_proxy(self, value: str) -> None:
+        """运行期改写代理（探测到代理不可用时降级为直连）。"""
+        self._proxy_override = value
 
     @property
     def max_height(self) -> int:

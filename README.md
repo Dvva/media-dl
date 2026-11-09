@@ -58,6 +58,7 @@ python dl.py --dry-run "https://www.xiaohongshu.com/explore/xxxx"
 | `--cover sidecar/embed/both/none` | 封面处理方式 |
 | `--config FILE` | 追加一个配置文件 |
 | `--dry-run` | 只识别不下载 |
+| `--no-proxy` | 本次忽略代理，直连 |
 | `-v` | 调试输出 |
 
 ## 三、代理
@@ -70,6 +71,8 @@ proxy = "http://127.0.0.1:7890"
 ```
 
 留空则读环境变量 `ALL_PROXY` / `HTTPS_PROXY`。代理会同时传给 `yt-dlp`、`gallery-dl` 和内置的 requests 会话。
+
+**代理没开时会自动降级直连**：启动时探测一次端口，连不上就打一行警告然后直连，不会让整次下载失败。要强制直连可以加 `--no-proxy`。
 
 ## 四、Cookie 怎么拿（重点）
 

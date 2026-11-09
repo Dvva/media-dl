@@ -57,27 +57,58 @@ def _nowatermark(url: str) -> str:
     return url.replace("playwm", "play")
 
 
+def _aweme_id_of(url: str) -> str | None:
+    match = re.search(r"/(?:share/)?(?:video|note|slides)/(\d+)", url)
+    if match:
+        return match.group(1)
+    match = re.search(r"[?&](?:modal_id|aweme_id)=(\d+)", url)
+    return match.group(1) if match else None
+
+
+def _candidate_pages(url: str) -> list[str]:
+    """难点：PC 端 www.douyin.com 是前端渲染，HTML 里没有数据。
+
+    只有旧分享页 iesdouyin.com/share/... 才内嵌 _ROUTER_DATA，
+    所以优先把链接改写成分享页。
+    """
+    aweme_id = _aweme_id_of(url)
+    pages: list[str] = []
+    if aweme_id:
+        kind = "note" if "/note/" in url or "/slides/" in url else "video"
+        pages.append(f"https://www.iesdouyin.com/share/{kind}/{aweme_id}/")
+    pages.append(url)
+    return pages
+
+
 def extract(url: str, cfg, *, log=print) -> Extraction:
     session = make_session(cfg.proxy, ua=MOBILE_UA, referer="https://www.douyin.com/")
     final = detect.resolve(url, session=session)
-    try:
-        resp = session.get(final, timeout=30)
-    except Exception as exc:  # noqa: BLE001 - 网络异常统一转状态
-        return Extraction(Content(platform="douyin", id="", status=Status.FAIL_NETWORK,
-                                  message=str(exc)))
 
-    if resp.status_code in (401, 403):
-        return Extraction(Content(platform="douyin", id="", status=Status.SKIP_PRIVATE,
-                                  message=f"HTTP {resp.status_code}"))
-    if resp.status_code == 404:
-        return Extraction(Content(platform="douyin", id="", status=Status.SKIP_DELETED,
-                                  message="HTTP 404"))
+    data = None
+    resp = None
+    for page in _candidate_pages(final):
+        try:
+            resp = session.get(page, timeout=30)
+        except Exception as exc:  # noqa: BLE001 - 网络异常统一转状态
+            return Extraction(Content(platform="douyin", id="", status=Status.FAIL_NETWORK,
+                                      message=str(exc)))
+        if resp.status_code in (401, 403):
+            return Extraction(Content(platform="douyin", id="", status=Status.SKIP_PRIVATE,
+                                      message=f"HTTP {resp.status_code}"))
+        if resp.status_code == 404:
+            return Extraction(Content(platform="douyin", id="", status=Status.SKIP_DELETED,
+                                      message="HTTP 404"))
+        data = _parse_page(resp.text)
+        if data and _walk_item(data):
+            break
+        log(f"  · {page} 没有内嵌数据，换下一个")
+        data = None
 
-    data = _parse_page(resp.text)
     item = _walk_item(data) if data else None
     if not item:
-        return Extraction(Content(platform="douyin", id="", status=Status.SKIP_PRIVATE,
-                                  message="未取到作品数据（可能已删除或需登录）"))
+        return Extraction(Content(platform="douyin", id=_aweme_id_of(final) or "",
+                                  status=Status.SKIP_PRIVATE,
+                                  message="未取到作品数据（可能已删除、私密或需登录）"))
 
     aweme_id = str(item.get("aweme_id") or "")
     video = item.get("video") or {}
