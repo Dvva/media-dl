@@ -16,8 +16,21 @@ from core.http import MOBILE_UA, make_session
 from core.result import Status
 from .base import Content, Extraction, MediaItem
 
-ROUTER_RE = re.compile(r"_ROUTER_DATA\s*=\s*(\{.*?\})\s*;?\s*</script>", re.S)
 RENDER_RE = re.compile(r'id="RENDER_DATA"[^>]*>(.*?)</script>', re.S)
+
+# 分享页对请求头敏感，缺这几个会被降级成空壳页
+DOUYIN_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
+              "image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+    "sec-ch-ua": '"Chromium";v="126", "Google Chrome";v="126"',
+    "sec-ch-ua-mobile": "?1",
+    "sec-ch-ua-platform": '"Android"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Upgrade-Insecure-Requests": "1",
+}
 
 
 def _walk_item(node):
@@ -37,13 +50,48 @@ def _walk_item(node):
     return None
 
 
+def _extract_json_after(html: str, marker: str) -> dict | None:
+    """从 marker 之后用括号配对抠出 JSON。
+
+    不能用正则：页面里的 JSON 很大且嵌套深，`\\{.*?\\}` 会匹配错位。
+    """
+    idx = html.find(marker)
+    if idx < 0:
+        return None
+    start = html.find("{", idx)
+    if start < 0:
+        return None
+    depth = 0
+    in_str = False
+    escaped = False
+    for pos in range(start, len(html)):
+        ch = html[pos]
+        if in_str:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(html[start:pos + 1])
+                except json.JSONDecodeError:
+                    return None
+    return None
+
+
 def _parse_page(html: str) -> dict | None:
-    match = ROUTER_RE.search(html)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except json.JSONDecodeError:
-            pass
+    data = _extract_json_after(html, "window._ROUTER_DATA")
+    if data:
+        return data
     match = RENDER_RE.search(html)
     if match:
         try:
@@ -88,7 +136,7 @@ def extract(url: str, cfg, *, log=print) -> Extraction:
     resp = None
     for page in _candidate_pages(final):
         try:
-            resp = session.get(page, timeout=30)
+            resp = session.get(page, headers=DOUYIN_HEADERS, timeout=30)
         except Exception as exc:  # noqa: BLE001 - 网络异常统一转状态
             return Extraction(Content(platform="douyin", id="", status=Status.FAIL_NETWORK,
                                       message=str(exc)))

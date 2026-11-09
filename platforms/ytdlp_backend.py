@@ -83,6 +83,9 @@ def extract(
         "--no-warnings",
         "--write-info-json",
         "--no-simulate",
+        "--socket-timeout", "45",
+        "--retries", "3",
+        "--fragment-retries", "3",
     ]
     cookie = cfg.cookie_file(platform)
     if cookie:
