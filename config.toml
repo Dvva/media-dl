@@ -1,0 +1,45 @@
+# media-dl 默认配置
+# 需要本地覆盖时，新建 config.local.toml 写同名字段即可（不会进 git）
+
+[general]
+output_dir      = "~/storage/shared/Download/media"
+proxy           = "http://127.0.0.1:7890"   # flclash 混合端口，留空则读 ALL_PROXY
+download_timeout = 60
+log_dir         = "~/.local/state/media-dl/logs"
+lock_file       = "~/.local/state/media-dl/.lock"
+
+[quality]
+max_height      = 720
+
+[cover]
+enabled         = true
+# sidecar: 存同名 .jpg    embed: 用 ffmpeg 嵌进 mp4
+# both: 两者都做           none: 不处理
+mode            = "sidecar"
+
+[naming]
+# 全局默认：平台_内容id_序号
+default         = "{platform}_{id}_{index}"
+# 单文件时自动省略 {index}
+omit_index_when_single = true
+max_len         = 120
+
+# 平台级模板，优先级高于 default
+tiktok          = "tiktok_{author}_{id}"
+
+[platforms]
+enabled         = ["twitter", "xhs", "douyin", "tiktok", "bilibili", "telegram"]
+
+[platforms.xhs]
+delay_sec       = 3
+
+[platforms.douyin]
+delay_sec       = 1
+
+[cookies]
+dir             = "~/cookies"
+# 不写时默认读取 <dir>/<平台名>.txt
+# twitter       = "~/cookies/twitter.txt"
+# xhs           = "~/cookies/xhs.txt"
+# bilibili      = "~/cookies/bilibili.txt"
+# tiktok        = "~/cookies/tiktok.txt"
