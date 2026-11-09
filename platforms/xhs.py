@@ -14,17 +14,62 @@ from core.http import DESKTOP_UA, load_netscape_cookies, make_session
 from core.result import Status
 from .base import Content, Extraction, MediaItem
 
-STATE_RE = re.compile(r"window\.__INITIAL_STATE__\s*=\s*(\{.*?\})\s*</script>", re.S)
 CDN_VIDEO = "https://sns-video-bd.xhscdn.com/"
 
 
-def _parse_state(html: str) -> dict | None:
-    match = STATE_RE.search(html)
-    if not match:
+def _extract_json_after(html: str, marker: str) -> dict | None:
+    """从 marker 之后用括号配对抠 JSON。
+
+    页面里的 JSON 很大且嵌套深，`\\{.*?\\}` 这种正则会被第一个 `}` 带偏。
+    """
+    idx = html.find(marker)
+    if idx < 0:
         return None
-    raw = match.group(1).replace("undefined", "null")
+    start = html.find("{", idx)
+    if start < 0:
+        return None
+    depth = 0
+    in_str = False
+    escaped = False
+    for pos in range(start, len(html)):
+        ch = html[pos]
+        if in_str:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(html[start:pos + 1])
+                except json.JSONDecodeError:
+                    return None
+    return None
+
+
+def _parse_state(html: str) -> dict | None:
+    # 页面里的 JSON 是 JS 对象序列化，混着 undefined / new Map() 这类语法
+    fixed = html.replace("undefined", "null")
+    fixed = re.sub(r"new\s+Map\([^)]*\)", "{}", fixed)
+    fixed = re.sub(r"new\s+Set\([^)]*\)", "[]", fixed)
+    idx = fixed.find("__INITIAL_STATE__")
+    if idx < 0:
+        return None
+    start = fixed.find("{", idx)
+    if start < 0:
+        return None
     try:
-        return json.loads(raw)
+        # raw_decode 会自己处理嵌套与字符串转义，比手写配平更稳
+        data, _ = json.JSONDecoder().raw_decode(fixed, start)
+        return data
     except json.JSONDecodeError:
         return None
 

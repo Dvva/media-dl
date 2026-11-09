@@ -12,7 +12,7 @@ import re
 from urllib.parse import unquote
 
 from core import detect
-from core.http import MOBILE_UA, make_session
+from core.http import MOBILE_UA, load_netscape_cookies, make_session
 from core.result import Status
 from .base import Content, Extraction, MediaItem
 
@@ -128,8 +128,40 @@ def _candidate_pages(url: str) -> list[str]:
     return pages
 
 
+def _fetch_api(aweme_id: str, session, *, log=print):
+    """SSR 拿不到时退回 web 详情接口（需要有效 cookie 才不会被 Argus 拦）。"""
+    url = "https://www.douyin.com/aweme/v1/web/aweme/detail/"
+    params = {
+        "aweme_id": aweme_id,
+        "aid": "6383",
+        "device_platform": "webapp",
+        "version_code": "170400",
+        "publish_video_strategy_type": "2",
+    }
+    try:
+        resp = session.get(url, params=params, headers=DOUYIN_HEADERS, timeout=30)
+    except Exception as exc:  # noqa: BLE001
+        log(f"  · detail 接口异常: {exc}")
+        return None
+    if resp.status_code != 200:
+        log(f"  · detail 接口 HTTP {resp.status_code}")
+        return None
+    try:
+        data = resp.json()
+    except ValueError:
+        log("  · detail 接口返回非 JSON")
+        return None
+    detail = data.get("aweme_detail")
+    if not detail:
+        log(f"  · detail 接口无 aweme_detail（status_code={data.get('status_code')}）")
+        return None
+    return detail
+
+
 def extract(url: str, cfg, *, log=print) -> Extraction:
-    session = make_session(cfg.proxy, ua=MOBILE_UA, referer="https://www.douyin.com/")
+    cookies = load_netscape_cookies(cfg.cookie_file("douyin"))
+    session = make_session(cfg.proxy, cookies=cookies, ua=MOBILE_UA,
+                           referer="https://www.douyin.com/")
     final = detect.resolve(url, session=session)
 
     data = None
@@ -153,6 +185,11 @@ def extract(url: str, cfg, *, log=print) -> Extraction:
         data = None
 
     item = _walk_item(data) if data else None
+    if not item:
+        aweme_id = _aweme_id_of(final)
+        if aweme_id:
+            log("  · SSR 没数据，改走 detail 接口")
+            item = _fetch_api(aweme_id, session, log=log)
     if not item:
         return Extraction(Content(platform="douyin", id=_aweme_id_of(final) or "",
                                   status=Status.SKIP_PRIVATE,
