@@ -16,6 +16,7 @@ PLATFORM_DOMAINS = {
     "douyin": ("douyin.com", "iesdouyin.com", "v.douyin.com", "m.douyin.com"),
     "bilibili": ("bilibili.com", "b23.tv", "m.bilibili.com", "bilibili.tv"),
     "telegram": ("t.me", "telegram.me", "telegram.dog"),
+    "youtube": ("youtube.com", "youtu.be", "m.youtube.com", "music.youtube.com"),
 }
 
 SHORT_LINK_HOSTS = {

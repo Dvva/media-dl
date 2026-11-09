@@ -13,9 +13,12 @@ max_height      = 720
 
 [cover]
 enabled         = true
-# sidecar: 存同名 .jpg    embed: 用 ffmpeg 嵌进 mp4
-# both: 两者都做           none: 不处理
-mode            = "sidecar"
+# 只有列在这里的平台才处理封面，其余平台一律不下载封面
+embed_platforms = ["douyin", "bilibili", "tiktok", "youtube"]
+# 上述平台使用的封面模式：embed(嵌进 mp4) / sidecar(存同名 jpg) / both
+mode            = "embed"
+# 未列出的平台用这个（设为 none 即不下载封面）
+others_mode     = "none"
 
 [naming]
 # 全局默认：平台_内容id_序号
@@ -28,7 +31,7 @@ max_len         = 120
 tiktok          = "tiktok_{author}_{id}"
 
 [platforms]
-enabled         = ["twitter", "xhs", "douyin", "tiktok", "bilibili", "telegram"]
+enabled         = ["twitter", "xhs", "douyin", "tiktok", "bilibili", "telegram", "youtube"]
 
 [platforms.xhs]
 delay_sec       = 3

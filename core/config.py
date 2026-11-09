@@ -99,7 +99,20 @@ class Config:
 
     @property
     def cover_enabled(self) -> bool:
-        return bool(self.get("cover.enabled", True)) and self.cover_mode != "none"
+        return bool(self.get("cover.enabled", True))
+
+    def cover_mode_for(self, platform: str) -> str:
+        """按平台决定封面策略。
+
+        只有 cover.embed_platforms 里的平台才处理封面，
+        其余平台用 cover.others_mode（默认 none，即完全不下载封面）。
+        """
+        if not self.cover_enabled:
+            return "none"
+        listed = [str(p).lower() for p in (self.get("cover.embed_platforms") or [])]
+        if platform.lower() in listed:
+            return str(self.get("cover.mode", "embed")).lower()
+        return str(self.get("cover.others_mode", "none")).lower()
 
     @property
     def naming_default(self) -> str:

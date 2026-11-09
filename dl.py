@@ -28,7 +28,7 @@ from core.http import load_netscape_cookies, make_session, proxy_alive  # noqa: 
 from core.result import Status                           # noqa: E402
 from platforms import douyin, gallerydl_backend, xhs, ytdlp_backend  # noqa: E402
 
-YTDLP_PLATFORMS = {"tiktok", "bilibili", "telegram"}
+YTDLP_PLATFORMS = {"tiktok", "bilibili", "telegram", "youtube"}
 GALLERY_PLATFORMS = {"twitter"}
 
 
@@ -106,6 +106,9 @@ def run(text: str, cfg, logger, *, cover: str | None, quality: int | None,
     if delay > 0:
         time.sleep(delay)
 
+    # 命令行优先，否则按平台策略（抖音/B站/TikTok/YouTube 内嵌，其余不处理）
+    effective_cover = cover or cfg.cover_mode_for(platform)
+
     if platform in GALLERY_PLATFORMS:
         extraction = gallerydl_backend.extract(final, platform, cfg, log=logger.info)
     elif platform in YTDLP_PLATFORMS:
@@ -128,12 +131,12 @@ def run(text: str, cfg, logger, *, cover: str | None, quality: int | None,
         cookies = load_netscape_cookies(cfg.cookie_file(platform))
         session = make_session(cfg.proxy, cookies=cookies)
         status, files = finalize(extraction, cfg, session, output_dir=out,
-                                 cover_mode=cover, log=logger.info)
+                                 cover_mode=effective_cover, log=logger.info)
     else:
         cookies = load_netscape_cookies(cfg.cookie_file(platform))
         session = make_session(cfg.proxy, cookies=cookies)
         status, files = save(content, session=session, cfg=cfg, output_dir=out,
-                             cover_mode=cover, log=logger.info)
+                             cover_mode=effective_cover, log=logger.info)
 
     logger.info("完成 [%s] 共 %d 个文件", status.value, len(files))
     return status
