@@ -161,6 +161,7 @@ def extract(url: str, cfg, *, log=print) -> Extraction:
     content = Content(
         platform="xhs",
         id=note_id,
+        url=final,
         author=str(user.get("nickname") or ""),
         author_id=str(user.get("userId") or ""),
         title=str(note.get("title") or note.get("desc") or ""),

@@ -65,6 +65,7 @@ def extract(url: str, platform: str, cfg, *, log=print) -> Extraction:
     content = Content(
         platform="twitter",
         id=str(meta.get("tweet_id") or meta.get("id") or ""),
+        url=url,
         author=str(meta.get("username") or meta.get("author") or ""),
         author_id=str(meta.get("user_id") or ""),
         title=str(meta.get("content") or meta.get("title") or ""),

@@ -21,8 +21,8 @@ mode            = "embed"
 others_mode     = "none"
 
 [naming]
-# 全局默认：平台_内容id_序号
-default         = "{platform}_{id}_{index}"
+# 全局默认：平台_作者_内容id_序号
+default         = "{platform}_{author}_{id}_{index}"
 # 单文件时自动省略 {index}
 omit_index_when_single = true
 max_len         = 120

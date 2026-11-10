@@ -30,6 +30,7 @@ class Content:
     author: str = ""
     author_id: str = ""
     title: str = ""
+    url: str = ""                # 原始链接，供 {url} 模板变量使用
     timestamp: float | None = None
     items: list[MediaItem] = field(default_factory=list)
     cover_url: str | None = None
@@ -49,6 +50,7 @@ class Content:
             "author_id": self.author_id or "",
             "id": self.id or "unknown",
             "title": self.title or "",
+            "url": self.url,
             "date": date,
             "datetime": datetime_str,
             "type": self.items[0].type if self.items else "media",

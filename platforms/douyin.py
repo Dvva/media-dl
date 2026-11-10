@@ -229,6 +229,7 @@ def extract(url: str, cfg, *, log=print) -> Extraction:
     content = Content(
         platform="douyin",
         id=aweme_id,
+        url=final,
         author=str(author.get("nickname") or ""),
         author_id=str(author.get("sec_uid") or author.get("uid") or ""),
         title=str(item.get("desc") or ""),

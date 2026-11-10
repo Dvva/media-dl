@@ -174,6 +174,7 @@ def extract(
     content = Content(
         platform=platform,
         id=str(info.get("id") or ""),
+        url=url,
         author=str(info.get("uploader") or info.get("channel") or ""),
         author_id=str(info.get("uploader_id") or ""),
         title=str(info.get("title") or ""),
