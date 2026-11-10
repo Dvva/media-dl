@@ -21,7 +21,7 @@ def _human(n: float) -> str:
 
 
 def _clock(seconds: float) -> str:
-    if seconds <= 0 or seconds > 36000:
+    if seconds is None or seconds < 0 or seconds > 36000:
         return "--:--"
     m, s = divmod(int(seconds), 60)
     return f"{m:02d}:{s:02d}"
@@ -52,10 +52,10 @@ class ProgressBar:
 
     def _compute(self) -> tuple[float, float, float]:
         percent = (self.done / self.total * 100) if self.total else 0.0
-        elapsed = time.time() - self.start
-        if elapsed > 0.3:
-            inst = self.done / elapsed
-            self._speed = inst if self._speed == 0 else self._speed * 0.7 + inst * 0.3
+        elapsed = max(time.time() - self.start, 0.001)
+        inst = self.done / elapsed
+        # 小文件可能一两帧就下完，没有 0.3s 门槛兜底，否则速度永远是 0
+        self._speed = inst if self._speed == 0 else self._speed * 0.7 + inst * 0.3
         remain = ((self.total - self.done) / self._speed) if self._speed > 0 else 0
         return percent, self._speed, remain
 
