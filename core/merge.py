@@ -18,8 +18,27 @@ def pick_images(files: list[Path]) -> list[Path]:
     return [f for f in files if f.suffix.lower() in IMAGE_SUFFIXES]
 
 
+def group_by_size(files: list[Path]) -> dict[tuple[int, int], list[Path]]:
+    """按 (宽, 高) 分组；不同尺寸各自成组，互不影响。"""
+    groups: dict[tuple[int, int], list[Path]] = {}
+    try:
+        from PIL import Image
+    except ImportError:
+        return groups
+    for f in files:
+        try:
+            with Image.open(f) as im:
+                groups.setdefault(im.size, []).append(f)
+        except Exception:  # noqa: BLE001
+            continue
+    return groups
+
+
 def can_merge(files: list[Path]) -> tuple[bool, str]:
-    """判断能否合并，返回 (是否可以, 原因)。"""
+    """判断能否合并（要求全部同尺寸），返回 (是否可以, 原因)。
+
+    现在主流程改用 group_by_size 分组合并，这个函数保留给单组校验。
+    """
     if len(files) < 2:
         return False, "图片不足 2 张"
     try:

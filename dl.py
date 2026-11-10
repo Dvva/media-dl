@@ -149,28 +149,38 @@ def run(text: str, cfg, logger, *, cover: str | None, quality: int | None,
 
 def maybe_merge(files: list[Path], platform: str, logger, *,
                 keep_origin: bool = False) -> Status:
-    """按需把多张图片横向拼成一张；失败不改原状态。"""
-    from core.merge import can_merge, merge_horizontal, pick_images
+    """按尺寸分组合并：同尺寸的拼成一张，不同尺寸的跳过但其余照合并。"""
+    from core.merge import group_by_size, merge_horizontal, pick_images
 
     images = pick_images(files)
-    ok, reason = can_merge(images)
-    if not ok:
-        logger.warning("不合并：%s", reason)
+    if len(images) < 2:
+        logger.warning("不合并：图片不足 2 张")
         return Status.OK
 
-    target = images[0].with_name(images[0].stem + "_merged.jpg")
-    if not merge_horizontal(images, target):
-        logger.warning("合并失败，保留原图")
+    groups = group_by_size(images)
+    mergeable = {size: group for size, group in groups.items() if len(group) >= 2}
+    if not mergeable:
+        detail = "、".join(f"{w}x{h}×{len(g)}" for (w, h), g in groups.items())
+        logger.warning("不合并：没有两张及以上同尺寸图片（%s）", detail)
         return Status.OK
 
-    logger.info("已合并 %d 张 -> %s", len(images), target)
-    if not keep_origin:
-        for path in images:
+    removed: list[Path] = []
+    for order, (size, group) in enumerate(mergeable.items(), 1):
+        suffix = "_merged" if order == 1 else f"_merged{order}"
+        target = group[0].with_name(group[0].stem + suffix + ".jpg")
+        if not merge_horizontal(group, target):
+            logger.warning("合并失败（%dx%d），保留原图", size[0], size[1])
+            continue
+        logger.info("已合并 %d 张（%dx%d）-> %s", len(group), size[0], size[1], target.name)
+        removed.extend(group)
+
+    if removed and not keep_origin:
+        for path in removed:
             try:
                 path.unlink()
             except OSError:
                 pass
-        logger.info("已删除原图 %d 张（--keep 可保留）", len(images))
+        logger.info("已删除参与合并的原图 %d 张（--keep 可保留）", len(removed))
     return Status.OK
 
 

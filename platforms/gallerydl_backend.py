@@ -29,7 +29,8 @@ def extract(url: str, platform: str, cfg, *, log=print) -> Extraction:
         return Extraction(content=content, mode="local")
 
     tmpdir = Path(tempfile.mkdtemp(prefix="mediadl_twitter_"))
-    cmd = [exe, "-d", str(tmpdir), "--write-metadata", "--no-mtime", "--no-progress"]
+    # 注意：gallery-dl 没有 --no-progress，加上会直接报 unrecognized arguments
+    cmd = [exe, "-d", str(tmpdir), "--write-metadata", "--no-mtime"]
     cookie = cfg.cookie_file("twitter")
     if cookie:
         cmd += ["--cookies", str(cookie)]

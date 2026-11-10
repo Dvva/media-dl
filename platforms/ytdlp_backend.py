@@ -85,7 +85,12 @@ def extract(
         "-o", "%(id)s.%(ext)s",
         "-f", fmt,
         "--no-playlist",
-        "--no-progress",
+        "--progress",
+        "--progress-template",
+        "download:下载中 %(progress._percent_str)s  "
+        "%(progress._downloaded_bytes_str)s/%(progress._total_bytes_str)s  "
+        "%(progress._speed_str)s  "
+        "%(info.title).60s",
         "--no-warnings",
         "--write-info-json",
         "--no-simulate",
