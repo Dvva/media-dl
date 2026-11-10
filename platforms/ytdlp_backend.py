@@ -66,11 +66,17 @@ def extract(
         return Extraction(content=content, mode="local")
 
     height = max_height or cfg.max_height
-    fmt = (
-        f"bv*[height<={height}]+ba/b[height<={height}]/bv*+ba/b"
-        if platform != "telegram"
-        else "b[height<=%d]/b" % height
-    )
+    if platform == "telegram":
+        fmt = f"b[height<={height}]/b"
+    elif platform in {"youtube", "bilibili"}:
+        # 优先 mp4：封面只有 mp4 能嵌进视频，webm 只能落成同名 jpg
+        fmt = (
+            f"bv*[height<={height}][ext=mp4]+ba[ext=m4a]/"
+            f"b[height<={height}][ext=mp4]/"
+            f"bv*[height<={height}]+ba/b[height<={height}]/bv*+ba/b"
+        )
+    else:
+        fmt = f"bv*[height<={height}]+ba/b[height<={height}]/bv*+ba/b"
 
     tmpdir = Path(tempfile.mkdtemp(prefix=f"mediadl_{platform}_"))
     cmd = [
