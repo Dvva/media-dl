@@ -40,7 +40,10 @@ def extract(url: str, platform: str, cfg, *, log=print) -> Extraction:
 
     log("  $ gallery-dl --write-metadata")
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        # gallery-dl 的进度写在 stderr，这里让它直接继承终端，
+        # 否则进度会被 capture_output 一并吞掉，看起来像卡死。
+        proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=None,
+                              text=True, timeout=600)
     except (subprocess.SubprocessError, OSError) as exc:
         content = Content(platform=platform, id="", status=Status.FAIL_TOOL, message=str(exc))
         return Extraction(content=content, mode="local", tmpdir=tmpdir)
@@ -70,15 +73,12 @@ def extract(url: str, platform: str, cfg, *, log=print) -> Extraction:
     )
 
     if not files:
-        stderr = (proc.stderr or "").lower()
-        if any(k in stderr for k in ("unauthorized", "protected", "login", "403")):
-            content.status = Status.SKIP_PRIVATE
-        elif any(k in stderr for k in ("404", "not found", "deleted")):
-            content.status = Status.SKIP_DELETED
-        else:
+        # stderr 已经继承到终端，这里只能按退出码判断，具体原因看上方输出
+        if proc.returncode != 0:
             content.status = Status.FAIL_TOOL
-        lines = [ln for ln in (proc.stderr or "").strip().splitlines() if ln.strip()]
-        content.message = lines[-1] if lines else "gallery-dl 失败"
+            content.message = f"gallery-dl 退出码 {proc.returncode}，原因见上方输出"
+        else:
+            content.status = Status.SKIP_NO_MEDIA
         return Extraction(content=content, mode="local", tmpdir=tmpdir)
 
     return Extraction(content=content, mode="local", files=files, tmpdir=tmpdir)

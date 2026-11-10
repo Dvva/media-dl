@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -20,6 +21,42 @@ SKIP_SUFFIXES = {".info.json", ".json", ".description", ".vtt", ".srt", ".part",
 
 def _ytdlp() -> str | None:
     return shutil.which("yt-dlp")
+
+
+def _run_stream(cmd, *, timeout: int = 600) -> tuple[int, str]:
+    """运行外部命令，把进度行原地刷新到终端，同时收集全部输出。
+
+    之前用 subprocess.run(capture_output=True) 会把 yt-dlp 的 stderr 进度
+    一起吞掉，所以终端里看不到任何下载进度。
+    """
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, bufsize=1, errors="ignore",
+    )
+    collected: list[str] = []
+    tty = sys.stderr.isatty()
+    try:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            collected.append(line)
+            text = line.rstrip("\n")
+            if not text.strip():
+                continue
+            if tty and ("下载中" in text or text.startswith("[download]")):
+                sys.stderr.write("\r\033[K" + text)
+                sys.stderr.flush()
+            else:
+                sys.stderr.write(text + "\n")
+                sys.stderr.flush()
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        raise
+    finally:
+        if tty:
+            sys.stderr.write("\n")
+            sys.stderr.flush()
+    return proc.returncode, "".join(collected)
 
 
 def _parse_ts(info: dict) -> float | None:
@@ -85,9 +122,10 @@ def extract(
         "-o", "%(id)s.%(ext)s",
         "-f", fmt,
         "--no-playlist",
+        "--newline",
         "--progress",
         "--progress-template",
-        "download:下载中 %(progress._percent_str)s  "
+        "下载中 %(progress._percent_str)s  "
         "%(progress._downloaded_bytes_str)s/%(progress._total_bytes_str)s  "
         "%(progress._speed_str)s  "
         "%(info.title).60s",
@@ -122,7 +160,7 @@ def extract(
 
     log(f"  $ yt-dlp -f {fmt}")
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        returncode, output = _run_stream(cmd, timeout=600)
     except (subprocess.SubprocessError, OSError) as exc:
         content = Content(platform=platform, id="", status=Status.FAIL_TOOL, message=str(exc))
         return Extraction(content=content, mode="local", tmpdir=tmpdir)
@@ -144,15 +182,15 @@ def extract(
     )
 
     if not files:
-        stderr = (proc.stderr or "").lower()
-        if proc.returncode != 0:
+        stderr = output.lower()
+        if returncode != 0:
             if any(k in stderr for k in ("private", "login", "sign in", "members-only", "premium")):
                 content.status = Status.SKIP_PAYWALLED
             elif any(k in stderr for k in ("unavailable", "removed", "404", "deleted")):
                 content.status = Status.SKIP_DELETED
             else:
                 content.status = Status.FAIL_TOOL
-            lines = [ln for ln in (proc.stderr or "").strip().splitlines() if ln.strip()]
+            lines = [ln for ln in output.strip().splitlines() if ln.strip()]
             content.message = lines[-1] if lines else "yt-dlp 失败"
         else:
             content.status = Status.SKIP_NO_MEDIA
