@@ -14,7 +14,7 @@ max_height      = 720
 [cover]
 enabled         = true
 # 只有列在这里的平台才处理封面，其余平台一律不下载封面
-embed_platforms = ["bilibili"]
+embed_platforms = ["bilibili", "youtube"]
 # 上述平台使用的封面模式：embed(嵌进 mp4) / sidecar(存同名 jpg) / both
 mode            = "embed"
 # 未列出的平台用这个（设为 none 即不下载封面）

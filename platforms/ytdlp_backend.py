@@ -98,6 +98,13 @@ def extract(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
         ]
+    if platform == "youtube":
+        # 2025 起 YouTube 的解签/n-challenge 必须靠 JS 运行时 + EJS 组件，
+        # 否则只能拿到 storyboard，报 "only images are available"
+        cmd += [
+            "--js-runtimes", "node",
+            "--remote-components", "ejs:github",
+        ]
     if cfg.proxy:
         cmd += ["--proxy", cfg.proxy]
     cmd.append(url)
