@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 PLATFORM_DOMAINS = {
     "twitter": ("x.com", "twitter.com", "t.co", "mobile.twitter.com"),
     "tiktok": ("tiktok.com", "vm.tiktok.com", "vt.tiktok.com", "m.tiktok.com"),
-    "xhs": ("xiaohongshu.com", "xhslink.com", "www.xiaohongshu.com"),
+    "xhs": ("xiaohongshu.com", "xhslink.com", "xhslink.cn", "www.xiaohongshu.com"),
     "douyin": ("douyin.com", "iesdouyin.com", "v.douyin.com", "m.douyin.com"),
     "bilibili": ("bilibili.com", "b23.tv", "m.bilibili.com", "bilibili.tv"),
     "telegram": ("t.me", "telegram.me", "telegram.dog"),
@@ -23,6 +23,7 @@ SHORT_LINK_HOSTS = {
     "t.co",
     "v.douyin.com",
     "xhslink.com",
+    "xhslink.cn",
     "vm.tiktok.com",
     "vt.tiktok.com",
     "b23.tv",

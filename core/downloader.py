@@ -12,6 +12,7 @@ import requests
 from platforms.base import Content
 from . import naming
 from .cover import write_cover
+from .progress import ProgressBar
 from .result import Status
 
 
@@ -40,7 +41,8 @@ def guess_ext(item, resp: requests.Response | None, url: str) -> str:
     return ".bin"
 
 
-def _download_one(session, item, dest_dir: Path, basename: str, timeout: int) -> Path:
+def _download_one(session, item, dest_dir: Path, basename: str, timeout: int,
+                  *, index: int = 1, count: int = 1, progress: str = "bar") -> Path:
     headers = {"Referer": "https://www.douyin.com/"} if "douyin" in item.url else {}
     headers.update(item.headers or {})
     resp = session.get(item.url, headers=headers, timeout=timeout, stream=True)
@@ -50,11 +52,25 @@ def _download_one(session, item, dest_dir: Path, basename: str, timeout: int) ->
     filename = basename if basename.lower().endswith(ext.lower()) else f"{basename}{ext}"
     path = dest_dir / filename
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("wb") as fh:
-        for chunk in resp.iter_content(chunk_size=65536):
-            if chunk:
+
+    total = int(resp.headers.get("Content-Length") or 0)
+    bar = None
+    if progress != "none":
+        bar = ProgressBar(total, index=index, count=count, name=filename,
+                          enabled=None if progress != "off" else False)
+    try:
+        with path.open("wb") as fh:
+            for chunk in resp.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
                 fh.write(chunk)
-    resp.close()
+                if bar:
+                    bar.update(len(chunk))
+    finally:
+        if bar:
+            bar.finish()
+            bar.close()
+        resp.close()
     return path
 
 
@@ -66,6 +82,7 @@ def save(
     output_dir: Path | None = None,
     cover_mode: str | None = None,
     max_height: int | None = None,  # 预留：直链流不做转码
+    progress: str = "bar",
     log=print,
 ) -> tuple[Status, list[Path]]:
     """按模板保存整个 Content，返回 (状态, 落盘文件列表)。"""
@@ -106,7 +123,9 @@ def save(
                 )
                 dest_dir = root / sub
 
-            path = _download_one(session, item, dest_dir, basename, timeout)
+            path = _download_one(session, item, dest_dir, basename, timeout,
+                                 index=item.index, count=len(content.items),
+                                 progress=progress)
             written.append(path)
             log(f"  · {path}")
 

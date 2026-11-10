@@ -87,7 +87,8 @@ def release_lock(lock_path: Path) -> None:
 # ---------------------------------------------------------------- 主流程
 
 def run(text: str, cfg, logger, *, cover: str | None, quality: int | None,
-        out: Path | None, dry_run: bool) -> Status:
+        out: Path | None, dry_run: bool, merge: bool = False,
+        keep_origin: bool = False, progress: str = "bar") -> Status:
     url = detect.extract_url(text) or text.strip()
     platform, final = detect.detect(url)
     if not platform:
@@ -136,21 +137,59 @@ def run(text: str, cfg, logger, *, cover: str | None, quality: int | None,
         cookies = load_netscape_cookies(cfg.cookie_file(platform))
         session = make_session(cfg.proxy, cookies=cookies)
         status, files = save(content, session=session, cfg=cfg, output_dir=out,
-                             cover_mode=effective_cover, log=logger.info)
+                             cover_mode=effective_cover, progress=progress,
+                             log=logger.info)
+
+    if merge and status is Status.OK:
+        status = maybe_merge(files, platform, logger, keep_origin=keep_origin)
 
     logger.info("完成 [%s] 共 %d 个文件", status.value, len(files))
     return status
 
 
+def maybe_merge(files: list[Path], platform: str, logger, *,
+                keep_origin: bool = False) -> Status:
+    """按需把多张图片横向拼成一张；失败不改原状态。"""
+    from core.merge import can_merge, merge_horizontal, pick_images
+
+    images = pick_images(files)
+    ok, reason = can_merge(images)
+    if not ok:
+        logger.warning("不合并：%s", reason)
+        return Status.OK
+
+    target = images[0].with_name(images[0].stem + "_merged.jpg")
+    if not merge_horizontal(images, target):
+        logger.warning("合并失败，保留原图")
+        return Status.OK
+
+    logger.info("已合并 %d 张 -> %s", len(images), target)
+    if not keep_origin:
+        for path in images:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        logger.info("已删除原图 %d 张（--keep 可保留）", len(images))
+    return Status.OK
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="输入一个链接，自动识别平台并下载其中的图片 / 视频")
-    parser.add_argument("url", help="链接，或带链接的分享文案")
+        description="输入链接（可多个），自动识别平台并下载其中的图片 / 视频")
+    parser.add_argument("urls", nargs="+",
+                        help="一个或多个链接 / 分享文案，双引号包住整段即可")
     parser.add_argument("--config", help="额外配置文件路径（覆盖 config.toml）")
     parser.add_argument("--out", help="输出目录，覆盖配置")
     parser.add_argument("--quality", type=int, help="画质上限，如 720 / 1080")
     parser.add_argument("--cover", choices=["sidecar", "embed", "both", "none"],
                         help="封面处理方式，覆盖配置")
+    parser.add_argument("-m", "--merge", action="store_true",
+                        help="下载后把多张同尺寸图片横向拼成一张")
+    parser.add_argument("--keep", action="store_true",
+                        help="合并后保留原图（默认删除）")
+    parser.add_argument("--progress", choices=["bar", "none"], default="bar",
+                        help="进度条显示方式")
     parser.add_argument("--dry-run", action="store_true", help="只识别平台，不下载")
     parser.add_argument("--no-proxy", action="store_true", help="本次忽略代理，直连")
     parser.add_argument("-v", "--verbose", action="store_true", help="输出调试信息")
@@ -174,9 +213,23 @@ def main() -> int:
 
     try:
         out = Path(os.path.expanduser(args.out)) if args.out else None
-        status = run(args.url, cfg, logger, cover=args.cover, quality=args.quality,
-                     out=out, dry_run=args.dry_run)
-        return 0 if status is Status.OK else 1
+        results = []
+        for index, text in enumerate(args.urls, 1):
+            if len(args.urls) > 1:
+                logger.info("=== [%d/%d] %s", index, len(args.urls), text[:60])
+            results.append(run(
+                text, cfg, logger,
+                cover=args.cover, quality=args.quality, out=out,
+                dry_run=args.dry_run, merge=args.merge,
+                keep_origin=args.keep, progress=args.progress,
+            ))
+
+        if len(results) > 1:
+            ok = sum(1 for s in results if s is Status.OK)
+            skipped = sum(1 for s in results if s.value.startswith("SKIP"))
+            logger.info("总计 %d 条：成功 %d  跳过 %d  失败 %d",
+                        len(results), ok, skipped, len(results) - ok - skipped)
+        return 0 if all(s is Status.OK for s in results) else 1
     finally:
         release_lock(lock)
 
