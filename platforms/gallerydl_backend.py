@@ -61,7 +61,17 @@ def _gallery_urls(url: str, cfg) -> tuple[list[str], str]:
 
 
 def _media_ext(url: str) -> str:
-    return Path(urlparse(url).path).suffix.lower()
+    parsed = urlparse(url)
+    suffix = Path(parsed.path).suffix.lower()
+    if suffix in MEDIA_EXTS:
+        return suffix
+    # 推特图片常是 /media/xxx?format=jpg&name=large，路径里没有后缀
+    from urllib.parse import parse_qs
+
+    fmt = (parse_qs(parsed.query).get("format") or [""])[0].lower()
+    if fmt in {"jpg", "jpeg", "png", "webp", "gif", "mp4", "webm", "mov"}:
+        return "." + ("jpg" if fmt == "jpeg" else fmt)
+    return suffix
 
 
 def _usable_items(urls: list[str]) -> tuple[list[MediaItem] | None, str]:
