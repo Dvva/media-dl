@@ -1,6 +1,8 @@
 __pycache__/
 *.pyc
+config.toml
 config.local.toml
 cookies/
 *.lock
+.trash/
 .DS_Store

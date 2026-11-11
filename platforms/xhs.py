@@ -163,6 +163,7 @@ def extract(url: str, cfg, *, log=print) -> Extraction:
         id=note_id,
         url=final,
         author=str(user.get("nickname") or ""),
+        nickname=str(user.get("nickname") or ""),
         author_id=str(user.get("userId") or ""),
         title=str(note.get("title") or note.get("desc") or ""),
         timestamp=float(note["time"]) / 1000 if note.get("time") else None,

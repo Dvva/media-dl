@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 from platforms.base import Extraction
-from . import naming
+from . import fsops, naming
 from .cover import write_cover
 from .result import Status
 
@@ -62,7 +61,16 @@ def finalize(
 
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / basename
-        shutil.move(str(src), str(dest))
+        placed, backup, reason = fsops.place_file(
+            src, dest,
+            overwrite=cfg.overwrite,
+            backup_root=cfg.backup_dir,
+        )
+        if not placed:
+            log(f"  · {reason}：{dest.name}")
+            continue
+        if backup:
+            log(f"  · 旧文件已备份：{backup}")
         written.append(dest)
         log(f"  · {dest}")
 
@@ -75,5 +83,12 @@ def finalize(
                     log(f"  · 封面 {cover_path}")
             except Exception:
                 log("  ! 封面下载失败，跳过")
+
+        # 封面嵌入会重建 mp4，文件时间会被重置，所以放在封面处理之后
+        if cfg.set_mtime:
+            fsops.apply_mtime(dest, content.timestamp)
+            cover_path = dest.with_suffix(".jpg")
+            if cover_path.exists():
+                fsops.apply_mtime(cover_path, content.timestamp)
 
     return Status.OK, written

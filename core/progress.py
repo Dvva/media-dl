@@ -93,6 +93,22 @@ class ProgressBar:
         self._last_time = now
         self._draw()
 
+    def set(self, done: int, total: int | None = None) -> None:
+        """外部工具用：直接设置已下载量 / 总量。"""
+        self.done = max(0, int(done))
+        if total is not None and total > 0:
+            self.total = int(total)
+        if not self.enabled:
+            return
+        now = time.time()
+        if now - self._last_time < 0.1:
+            return
+        self._last_time = now
+        self._draw()
+
+    def set_name(self, name: str) -> None:
+        self.name = (name or "")[:40]
+
     def finish(self) -> None:
         if not self.enabled:
             return

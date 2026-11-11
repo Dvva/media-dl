@@ -27,7 +27,10 @@ class Content:
     id: str
     status: Status = Status.OK
     message: str = ""
+    # author 统一放“可用来重建网址的稳定标识”（推特 handle、TikTok @handle）；
+    # nickname 放展示用昵称。两者都不要就留空。
     author: str = ""
+    nickname: str = ""
     author_id: str = ""
     title: str = ""
     url: str = ""                # 原始链接，供 {url} 模板变量使用
@@ -46,7 +49,8 @@ class Content:
         date, datetime_str = fmt_date(self.timestamp)
         return {
             "platform": self.platform,
-            "author": self.author or "unknown",
+            "author": self.author or self.nickname or self.author_id or "unknown",
+            "nickname": self.nickname or self.author or "unknown",
             "author_id": self.author_id or "",
             "id": self.id or "unknown",
             "title": self.title or "",

@@ -6,8 +6,9 @@
 
 from __future__ import annotations
 
-import re
 from urllib.parse import urlparse
+
+from core import urls as url_tools
 
 PLATFORM_DOMAINS = {
     "twitter": ("x.com", "twitter.com", "t.co", "mobile.twitter.com"),
@@ -29,13 +30,15 @@ SHORT_LINK_HOSTS = {
     "b23.tv",
 }
 
-URL_RE = re.compile(r"https?://[^\s<>\"']+")
-
 
 def extract_url(text: str) -> str | None:
-    """从分享文案里抠出第一个 URL（抖音/小红书分享常带一堆文字）。"""
-    match = URL_RE.search(text or "")
-    return match.group(0) if match else None
+    """从分享文案里抠出第一个 URL（旧接口，保留兼容）。"""
+    return url_tools.first_url(text)
+
+
+def extract_urls(*texts: object) -> list[str]:
+    """从多个参数 / 拼接文案里抠出全部 URL。"""
+    return url_tools.iter_urls(texts)
 
 
 def _host(url: str) -> str:

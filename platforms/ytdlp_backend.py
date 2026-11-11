@@ -1,91 +1,86 @@
-"""基于 yt-dlp 的后端：tiktok / bilibili / telegram。
+"""基于 yt-dlp 的后端：tiktok / bilibili / telegram / youtube。
 
-这三个平台都由 yt-dlp 直接支持，脚本只负责：
-传入画质上限、cookies、代理，产出元数据，下到临时目录。
+yt-dlp 的原始输出全部隐藏，只把它自己的进度行转成本项目的进度条。
 """
 
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
-import sys
-import tempfile
 from pathlib import Path
 
+from core import metadata
+from core.progress import ProgressBar
 from core.result import Status
+from core.toolrun import parse_percent, run_hidden, which
 from .base import Content, Extraction
 
-SKIP_SUFFIXES = {".info.json", ".json", ".description", ".vtt", ".srt", ".part", ".ytdl"}
+SKIP_SUFFIXES = {
+    ".info.json", ".json", ".description", ".vtt", ".srt", ".part", ".ytdl", ".temp",
+}
+PROGRESS_PREFIX = "##MEDIADL_PROGRESS##"
 
 
-def _ytdlp() -> str | None:
-    return shutil.which("yt-dlp")
-
-
-def _run_stream(cmd, *, timeout: int = 600) -> tuple[int, str]:
-    """运行外部命令，把进度行原地刷新到终端，同时收集全部输出。
-
-    之前用 subprocess.run(capture_output=True) 会把 yt-dlp 的 stderr 进度
-    一起吞掉，所以终端里看不到任何下载进度。
-    """
-    proc = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, bufsize=1, errors="ignore",
-    )
-    collected: list[str] = []
-    tty = sys.stderr.isatty()
-    try:
-        assert proc.stdout is not None
-        for line in proc.stdout:
-            collected.append(line)
-            text = line.rstrip("\n")
-            if not text.strip():
+def _run_with_progress(cmd: list[str], bar: ProgressBar | None, timeout: int = 900
+                       ) -> tuple[int, list[str]]:
+    def on_line(line: str) -> None:
+        if bar is None or not line.startswith(PROGRESS_PREFIX):
+            return
+        payload = line[len(PROGRESS_PREFIX):]
+        parts = payload.split("|", 4)
+        if len(parts) < 5:
+            return
+        percent_text, downloaded_text, total_text, estimate_text, title = parts
+        percent = parse_percent(percent_text)
+        try:
+            downloaded = int(float(downloaded_text))
+        except (TypeError, ValueError):
+            downloaded = 0
+        total = 0
+        for candidate in (total_text, estimate_text):
+            try:
+                total = int(float(candidate))
+                if total > 0:
+                    break
+            except (TypeError, ValueError):
                 continue
-            if tty and ("下载中" in text or text.startswith("[download]")):
-                sys.stderr.write("\r\033[K" + text)
-                sys.stderr.flush()
-            else:
-                sys.stderr.write(text + "\n")
-                sys.stderr.flush()
-        proc.wait(timeout=timeout)
+        if total <= 0 and percent and downloaded:
+            total = int(downloaded / (percent / 100))
+        if title and title != "NA":
+            bar.set_name(title)
+        if total > 0:
+            bar.set(downloaded, total)
+        elif percent is not None:
+            bar.set(int(percent), 100)
+
+    try:
+        code, lines = run_hidden(cmd, timeout=timeout, on_line=on_line)
     except subprocess.TimeoutExpired:
-        proc.kill()
+        if bar is not None:
+            bar.close()
         raise
-    finally:
-        if tty:
-            sys.stderr.write("\n")
-            sys.stderr.flush()
-    return proc.returncode, "".join(collected)
+    return code, [line for line in lines if not line.startswith(PROGRESS_PREFIX)]
 
 
 def _parse_ts(info: dict) -> float | None:
-    if info.get("timestamp"):
-        return float(info["timestamp"])
-    upload_date = str(info.get("upload_date") or "")
-    if len(upload_date) == 8:
-        from datetime import datetime, timezone, timedelta
+    from core.timeutil import parse_timestamp
 
-        try:
-            dt = datetime.strptime(upload_date, "%Y%m%d").replace(
-                tzinfo=timezone(timedelta(hours=8))
-            )
-            return dt.timestamp()
-        except ValueError:
-            return None
-    return None
+    return parse_timestamp(
+        info.get("timestamp") or info.get("release_timestamp") or info.get("upload_date")
+    )
 
 
 def _read_info_files(tmpdir: Path) -> dict:
-    """读 yt-dlp 写出的 .info.json，取第一个有效条目。"""
+    """读 yt-dlp 写出的 .info.json，取字段最全的一个。"""
+    best: dict = {}
     for info_file in sorted(tmpdir.glob("*.info.json")):
         try:
             data = json.loads(info_file.read_text(encoding="utf-8", errors="ignore"))
         except (json.JSONDecodeError, OSError):
             continue
-        if isinstance(data, dict):
-            return data
-    return {}
+        if isinstance(data, dict) and len(data) > len(best):
+            best = data
+    return best
 
 
 def extract(
@@ -95,8 +90,11 @@ def extract(
     *,
     max_height: int | None = None,
     log=print,
+    progress: str = "bar",
+    index: int = 1,
+    count: int = 1,
 ) -> Extraction:
-    exe = _ytdlp()
+    exe = which("yt-dlp")
     if not exe:
         content = Content(platform=platform, id="", status=Status.FAIL_TOOL,
                           message="未找到 yt-dlp，请先 pip install yt-dlp")
@@ -115,27 +113,30 @@ def extract(
     else:
         fmt = f"bv*[height<={height}]+ba/b[height<={height}]/bv*+ba/b"
 
+    import tempfile
+
     tmpdir = Path(tempfile.mkdtemp(prefix=f"mediadl_{platform}_"))
     cmd = [
         exe,
         "-P", str(tmpdir),
-        "-o", "%(id)s.%(ext)s",
+        "-o", "%(id)s_%(autonumber)03d.%(ext)s",
         "-f", fmt,
-        "--no-playlist",
         "--newline",
         "--progress",
         "--progress-template",
-        "下载中 %(progress._percent_str)s  "
-        "%(progress._downloaded_bytes_str)s/%(progress._total_bytes_str)s  "
-        "%(progress._speed_str)s  "
-        "%(info.title).60s",
+        PROGRESS_PREFIX + "%(progress._percent_str)s|%(progress.downloaded_bytes)s|"
+        "%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(info.title).80s",
         "--no-warnings",
         "--write-info-json",
+        "--no-mtime",
         "--no-simulate",
         "--socket-timeout", "45",
         "--retries", "3",
         "--fragment-retries", "3",
+        "--concurrent-fragments", "4",
     ]
+    if platform != "telegram":
+        cmd.append("--no-playlist")
     cookie = cfg.cookie_file(platform)
     if cookie:
         cmd += ["--cookies", str(cookie)]
@@ -158,32 +159,28 @@ def extract(
         cmd += ["--proxy", cfg.proxy]
     cmd.append(url)
 
-    log(f"  $ yt-dlp -f {fmt}")
+    bar = ProgressBar(0, index=index, count=count, name=platform,
+                      enabled=progress != "none")
     try:
-        returncode, output = _run_stream(cmd, timeout=600)
+        returncode, output = _run_with_progress(cmd, bar)
     except (subprocess.SubprocessError, OSError) as exc:
+        bar.close()
         content = Content(platform=platform, id="", status=Status.FAIL_TOOL, message=str(exc))
         return Extraction(content=content, mode="local", tmpdir=tmpdir)
+    bar.finish()
+    bar.close()
 
     files = sorted(
-        p for p in tmpdir.iterdir()
-        if p.is_file() and p.suffix.lower() not in SKIP_SUFFIXES and not p.name.endswith(".info.json")
+        path for path in tmpdir.iterdir()
+        if path.is_file() and path.suffix.lower() not in SKIP_SUFFIXES
+        and not path.name.endswith(".info.json")
     )
 
     info = _read_info_files(tmpdir)
-    content = Content(
-        platform=platform,
-        id=str(info.get("id") or ""),
-        url=url,
-        author=str(info.get("uploader") or info.get("channel") or ""),
-        author_id=str(info.get("uploader_id") or ""),
-        title=str(info.get("title") or ""),
-        timestamp=_parse_ts(info),
-        cover_url=info.get("thumbnail") or None,
-    )
+    content = metadata.content_from_ytdlp(info, url, platform)
 
     if not files:
-        stderr = output.lower()
+        stderr = "\n".join(output).lower()
         if returncode != 0:
             if any(k in stderr for k in ("private", "login", "sign in", "members-only", "premium")):
                 content.status = Status.SKIP_PAYWALLED
@@ -191,7 +188,7 @@ def extract(
                 content.status = Status.SKIP_DELETED
             else:
                 content.status = Status.FAIL_TOOL
-            lines = [ln for ln in output.strip().splitlines() if ln.strip()]
+            lines = [line for line in output if line.strip()]
             content.message = lines[-1] if lines else "yt-dlp 失败"
         else:
             content.status = Status.SKIP_NO_MEDIA

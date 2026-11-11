@@ -231,6 +231,7 @@ def extract(url: str, cfg, *, log=print) -> Extraction:
         id=aweme_id,
         url=final,
         author=str(author.get("nickname") or ""),
+        nickname=str(author.get("nickname") or ""),
         author_id=str(author.get("sec_uid") or author.get("uid") or ""),
         title=str(item.get("desc") or ""),
         timestamp=float(item["create_time"]) if item.get("create_time") else None,

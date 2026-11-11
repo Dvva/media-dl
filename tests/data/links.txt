@@ -1,0 +1,25 @@
+# media-dl 真实链接测试清单
+# 用法：python tests/smoke_links.py [--probe|--download] [--no-proxy]
+# 需要代理 / 对应平台 cookie 才能全部通过。
+
+# 小红书
+https://www.xiaohongshu.com/explore/6af47822000000002501c443?xsec_token=ABr3k_HRacMbB4P7_9KxksbU_fnNJD_6HgoU0dAB10ExY=&xsec_source=pc_feed
+https://www.xiaohongshu.com/explore/6af405f2000000002a01c73e?xsec_token=ABr3k_HRacMbB4P7_9KxksbVj1zWLELg4cXVOOCYYWIa4=&xsec_source=pc_feed
+
+# TikTok
+https://www.tiktok.com/@bodikaidenandi/video/7667479697651010823?q=asd
+
+# 哔哩哔哩
+https://www.bilibili.com/video/BV19sWU6XEBF/
+
+# 抖音（个人页 modal_id / 精选搜索页 modal_id）
+https://www.douyin.com/user/self?modal_id=7465280573913812236&showSubTab=favorite_folder&showTab=favorite_collection
+https://www.douyin.com/jingxuan/search/%E7%B1%B3%E7%90%83%E7%90%83%E9%A4%90%E9%A5%AE%E5%BA%97%20?aid=15cfc9d3-6f90-4f26-bc27-95aa53d7e8e8&modal_id=7700015785162545482&type=general
+
+# YouTube（带播放列表参数）
+https://www.youtube.com/watch?v=_Iq4Cb9EXds&list=PLApdF2aqNCalq60i8SttXBcKgl53Tm9tf
+
+# 推特 / X
+https://x.com/u7yc8z/status/2120507838481273225?a=GjRDdERDbkzRLGFZ2Lo&s=20
+https://x.com/SixDiemgq/status/2120372919964709178?a=gYvzFk9ofHu_XYWCeEE&s=20
+https://x.com/Von_Gao_/status/2120491641547141191?a=9LpuiJWuJ91Z5Z0AJ88&s=20
