@@ -59,6 +59,12 @@ DEFAULT_URLS = {
 }
 
 VAR_RE = re.compile(r"\{([A-Za-z0-9_]+)\}")
+KNOWN_SUFFIXES = {
+    ".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi", ".flv", ".ts",
+    ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".heic",
+    ".mp3", ".m4a", ".aac", ".flac", ".wav", ".opus", ".ogg",
+    ".pdf", ".zip", ".7z", ".rar",
+}
 INDEX_SUFFIX_RE = re.compile(r"^(?P<stem>.*?)[_\-\.](?P<index>\d{2})$")
 PLATFORM_PREFIX_RE = re.compile(
     r"^(?P<platform>" + "|".join(PLATFORMS) + r")[_\-\.](?P<rest>.+)$", re.I
@@ -255,7 +261,12 @@ def parse_name(
     extra_patterns: list[str] | None = None,
 ) -> dict | None:
     """文件名（不含扩展名也可）→ 字段字典；失败返回 None。"""
-    stem = Path(str(name)).stem
+    text = str(name)
+    suffix = Path(text).suffix.lower()
+    # 只剥掉已知媒体后缀；作者名里带点（wayru.fx）时不能按 Path.stem 乱切
+    if suffix in KNOWN_SUFFIXES:
+        text = text[: -len(suffix)]
+    stem = text
     stem, index = split_index(stem)
     inferred = _infer_platform(stem, platform)
 
@@ -315,7 +326,7 @@ def parse_name(
 
 def parse_file(path: str | Path, *, cfg=None, platform: str | None = None,
                extra_patterns: list[str] | None = None) -> dict | None:
-    return parse_name(Path(path).stem, cfg=cfg, platform=platform,
+    return parse_name(Path(path).name, cfg=cfg, platform=platform,
                       extra_patterns=extra_patterns)
 
 

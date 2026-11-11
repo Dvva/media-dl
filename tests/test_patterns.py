@@ -62,6 +62,11 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(fields["author"], "foo")
         self.assertEqual(fields["id"], "123456")
 
+    def test_author_with_dot(self):
+        fields = patterns.parse_name("tiktok_wayru.fx_7633791654977129735.mp4")
+        self.assertEqual(fields["author"], "wayru.fx")
+        self.assertEqual(fields["id"], "7633791654977129735")
+
     def test_multi_index(self):
         fields = patterns.parse_name("twitter_foo_123456_02")
         self.assertEqual(fields["index"], "02")
